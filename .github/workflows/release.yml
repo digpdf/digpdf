@@ -1,0 +1,117 @@
+# A release of digpdf: the tag vX.Y.Z on main, whose SHA256SUMS names the packages, and the branch
+# packages-vX.Y.Z, which holds them. Nothing is built here: the packages are the files that were tested, and this workflow only
+# checks them against the tagged SHA256SUMS and hands them out - the archives to a GitHub release, the wheels to
+# PyPI - in an order that leaves no half release to see: the GitHub release is a draft until PyPI holds every
+# wheel with the hash the tag names. A run that stopped half way can be run again: what is already there is
+# compared by hash, and only what is missing is uploaded.
+name: release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: The archives, as a draft release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: packages-${{ github.ref_name }}
+          path: packages
+          persist-credentials: false
+      - name: The packages are the ones the tag names
+        run: bash .github/release/check.sh "${GITHUB_REF_NAME#v}" packages
+      - name: The draft, with every archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          if ! gh release view "$tag" --json isDraft > /dev/null 2>&1; then
+            gh release create "$tag" --draft --verify-tag --title "digpdf $version" --notes-file .github/release/notes.md
+          fi
+          mkdir have
+          gh release view "$tag" --json assets --jq '.assets[].name' > have.txt
+          for name in SHA256SUMS $(awk '{print $2}' SHA256SUMS | grep -v '\.whl$'); do
+            if [ "$name" = SHA256SUMS ]; then file=SHA256SUMS; else file="packages/$name"; fi
+            if grep -qxF "$name" have.txt; then
+              gh release download "$tag" --pattern "$name" --dir have
+              if ! cmp -s "have/$name" "$file"; then
+                echo "::error::the release already holds a $name that is not the tagged one"
+                exit 1
+              fi
+              echo "there already: $name"
+            else
+              gh release upload "$tag" "$file"
+              echo "uploaded: $name"
+            fi
+          done
+
+  pypi:
+    name: The wheels, to PyPI
+    needs: draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: packages-${{ github.ref_name }}
+          path: packages
+          persist-credentials: false
+      - name: The packages are the ones the tag names
+        run: bash .github/release/check.sh "${GITHUB_REF_NAME#v}" packages
+      - name: The wheels on their own
+        run: mkdir dist && cp packages/*.whl dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist
+          skip-existing: true
+
+  publish:
+    name: PyPI holds every wheel, and the release is shown
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Every wheel is on PyPI with the tagged hash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          for attempt in $(seq 1 20); do
+            if curl -fsS "https://pypi.org/pypi/digpdf/$version/json" -o pypi.json \
+                && python3 .github/release/on_pypi.py SHA256SUMS pypi.json; then
+              exit 0
+            fi
+            echo "not all there yet (attempt $attempt of 20)"
+            sleep 30
+          done
+          echo "::error::PyPI does not hold every wheel of $version with the tagged hash"
+          exit 1
+      - name: The release is shown
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest

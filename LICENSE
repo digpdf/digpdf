@@ -1,0 +1,19 @@
+digpdf
+Copyright (c) 2026 Jakob Mørup Wang. All rights reserved.
+
+Permission is granted, free of charge, to any person obtaining a copy of the digpdf program in compiled form and of
+the files distributed with it, among them its Python package (together the "Software"), to use it for any purpose,
+including commercial use, and to redistribute unmodified copies of it, provided this licence and
+THIRD-PARTY-NOTICES.txt are included with every copy.
+
+The source code of the digpdf program is not published and is not part of this licence. You may not modify the
+Software, or decompile, disassemble or reverse engineer the program, except where the law allows it regardless of
+this limitation.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The Software includes third-party software under its own licences, listed in THIRD-PARTY-NOTICES.txt; those licences
+govern those parts.
