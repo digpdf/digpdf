@@ -1,22 +1,25 @@
-    uv tool install digpdf
+    uvx digpdf report.pdf > report.html
+    npx digpdf report.pdf > report.html
 
-`pip install digpdf` also works, or download the archive for your platform below. See the README for details.
+`pip install digpdf` and `npm install digpdf` also work, or download the archive for your platform below. See the
+README for details.
 
-**New in the output**
+**New**
 
-- Headings are tagged with `data-head="n"`, table header rows with `data-head`, and page headers and footers with
-  `data-header` and `data-footer`. These are attributes, so the text itself is unchanged.
-- Superscript and subscript are output as `<sup>` and `<sub>`.
-- The `<head>` contains the PDF metadata (language, title, author, description and keywords), the digpdf version and
-  the SHA-256 hash of the PDF.
+- digpdf runs in JavaScript, in Node and in browsers through WebAssembly, with the same output byte for byte. On
+  npm as `digpdf`, with `npx digpdf` as the command line.
+- Form fields. What is typed in a field is in `<span data-field>`, and check boxes and radio buttons are ☒ or ☐.
+  Pages with form fields render to PNG as they are filled in.
+- An OCR layer already in the PDF is kept as hidden text marked `data-ocr`, with the bounding box of the scan.
+- The HTML has a default style for reading in a browser, with a white page, a little space between blocks and thin
+  lines around table cells.
 
 **Improved extraction**
 
-- Tables. Ruling lines define the columns where a table has them. Multi-line header rows are merged into one row,
-  currency symbols stay with their values, images and icons inside cells stay in their cells, and side-by-side tables
-  are kept apart.
-- Rotated and skewed pages, and rotated regions within a page, are deskewed before they are read.
-- Lists, hanging indents, margin notes and line numbers are recognized.
-- Fonts without a ToUnicode map or cmap are decoded when another subset of the same font in the file has a cmap.
-- Word segmentation follows the spacing on the page, text that PDFium drops as a duplicate is kept, a correction
-  drawn over covered text replaces it, and metadata stored as UTF-8 without a byte order mark is decoded correctly.
+- Tables. Group headers span the columns they head, header rows are found over their ruling lines, and currency
+  signs and closing brackets stay with their values.
+- Charts. Legends, axis labels and pie slices stay in the chart's `data-visual` block.
+- Underline and strikethrough are marked where they are drawn, also across spaces and parts of words.
+- Paragraphs are split where the space between lines shows it, and a running header above a page's own title is no
+  longer marked as a heading.
+- Ligatures, letter-spaced words and text typed in comb fields are read as the words they are.

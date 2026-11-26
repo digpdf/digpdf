@@ -1,165 +1,137 @@
 # digpdf
 
-**PDF to HTML for agents and pipelines. Fast, grounded, and with minimal information loss.**
+**PDF to HTML for AI agents**
 
 [![PyPI](https://img.shields.io/pypi/v/digpdf)](https://pypi.org/project/digpdf/)
+[![npm](https://img.shields.io/npm/v/digpdf)](https://www.npmjs.com/package/digpdf)
 
-digpdf converts a PDF to HTML for LLM agents and ingestion pipelines. It can also render a page, or a part of a page,
-to PNG, so an agent can look at the visual information, or a pipeline can escalate to OCR.
+digpdf converts PDFs to HTML that keeps reading order, tables and formatting intact for language models and ingestion pipelines.
 
-## Quick start
-
-```bash
-uv tool install digpdf
-digpdf report.pdf > report.html
-```
-
-```python
-import digpdf  # uv add digpdf
-
-html = digpdf.html("report.pdf")
-```
+It also flags hidden text and marks charts, formulas and scans as visuals. Every block carries a bounding box so facts can be traced to the PDF and any area or full page can be rendered to PNG.
 
 ## Why digpdf?
 
-Most PDFs with a text layer can be read quickly and accurately from the text and its geometry. The geometry includes
-the bounding box of every glyph, the content stream order, and vector graphics such as ruling lines and cell shading.
-The risk is silent information loss, such as a table read across its columns, a chart reduced to stray numbers, or
-hidden text mixed into the visible text.
+Vision models work wonders, but rendering and processing every page as an image costs both time and compute. It can also obscure which boxes are form fields, what text is hidden and where links lead. digpdf is designed exactly to complement the OCR or vision model in your agent harness or ingestion pipeline. It supplies the necessary information and acts as a gate to save resources for when they are actually needed.
 
-digpdf returns all of this in one pass. You get the text in reading order, tables with their structure, and a
-bounding box for every block. Headings and other guesses are attributes, hidden text is kept separate, and blocks
-with visual content are flagged. What to do with it is decided downstream.
+- Free, commercial use included
+- No GPU required
+- Offline, PDFs stay local
+- Zero dependencies
+- Full traceability
+- Reproducible HTML
 
-### How do agents and pipelines use it?
+## Command line, Python and JavaScript
 
-They read the HTML first. It is fast to process, and for most pages it is all they need. When a block is flagged with
-`data-visual`, they render that block or the whole page to PNG. An agent looks at the image, and a pipeline runs OCR
-or a vision model on it and replaces the block with the result.
+The Python package includes a prebuilt binary that bundles PDFium. The npm package runs digpdf and PDFium in WebAssembly.
+
+### Command line
 
 ```bash
+uvx digpdf report.pdf > report.html
+npx digpdf report.pdf > report.html
+```
+
+```bash
+# Install with uv tool install digpdf, pip install digpdf or npm install -g digpdf
+digpdf report.pdf > report.html
 digpdf report.pdf 3 > page-3.png
-digpdf report.pdf 3 404,262,593,292 > block.png   # the block's data-bbox
+# Render a data-bbox area
+digpdf report.pdf 3 404,262,593,292 > block.png
 ```
 
-### Why no OCR or vision model?
-
-The text layer already contains the exact text, and extracting it is fast and deterministic. digpdf extracts what is
-in the file and flags the blocks whose content the text layer does not capture, such as scanned pages, charts and
-formulas. Those blocks can then be processed with the OCR or vision model of your choice.
-
-### Does digpdf guess?
-
-Yes, but only in attributes. Headings get `data-head="n"`, table header rows get `data-head`, and page headers and
-footers get `data-header` and `data-footer`. The text itself is never changed, so you decide downstream whether to
-use the guesses.
-
-### What about hidden text?
-
-Text that is not visible on the page, such as white text on a white background, text outside the page, and clipped,
-covered or very small text, is kept separate and flagged `hidden`, so it is not read as part of the content. Hidden
-text is a common vector for prompt injection.
-
-### Why HTML?
-
-HTML can represent what Markdown cannot, such as merged table cells, bounding boxes and flags. LLMs read it well, and
-stripping the tags gives plain text for a search index.
-
-### Why no options?
-
-There is one output, and it contains everything. What to keep, how to chunk and what to render is decided downstream,
-where the requirements are known.
-
-### How fast is it?
-
-A typical page takes under a tenth of a second on one CPU core. No GPU is needed, and no external model is loaded.
-
-### Is the output deterministic?
-
-Yes. The same file produces the same HTML on every run and on every platform.
-
-### What does it run on?
-
-Linux, macOS and Windows, on x86-64 and ARM64. digpdf is a single binary that ships with
-[PDFium](https://pdfium.googlesource.com/pdfium/), the PDF engine used in Chrome. Nothing is downloaded at runtime.
-
-## Use
-
-```bash
-digpdf report.pdf > report.html                  # the PDF as HTML
-digpdf report.pdf 3 > page-3.png                 # page 3 as PNG
-digpdf report.pdf 3 120,40,880,300 > block.png   # a block of page 3, by its data-bbox
-```
+### Python
 
 ```python
+# Install with uv add digpdf or pip install digpdf
+import digpdf
+
 html = digpdf.html("report.pdf")
-png = digpdf.image("report.pdf", 3)
-block = digpdf.image("report.pdf", 3, "120,40,880,300")
+page = digpdf.image("report.pdf", 3)  # PNG bytes
+block = digpdf.image("report.pdf", 3, "404,262,593,292")
 ```
 
-Pages are numbered from 1. Rendered PNGs have 2 pixels per PDF point and at most 2,000 pixels on the long side.
+### JavaScript (Node.js)
 
-Scanned pages are output as `<img>` elements, ready for OCR, and an existing OCR layer is extracted as text. Damaged
-files are read as PDFium repairs them, with a warning on stderr. If a page fails, the remaining pages are still
-written, and the failed page becomes a single `data-visual` block. For password-protected files and files that
-PDFium cannot open, digpdf writes nothing to stdout, prints an error message to stderr and exits with code 1. In
-Python, they raise `digpdf.Unreadable`. When processing untrusted files, set your own time and memory limits.
+```js
+// Install with npm install digpdf
+import { readFile } from "node:fs/promises";
+import { load } from "digpdf";
 
-`pip install digpdf` and `pipx install digpdf` also work, with Python 3.8 or newer. Without Python, download the
-archive for your platform from the [releases](https://github.com/digpdf/digpdf/releases), unpack it, and keep the
-PDFium library next to the binary.
+const pdf = await readFile("report.pdf");
+const digpdf = await load();
 
-## Output format
-
-```html
-<div data-page="1">
-<div data-bbox="122,51,268,63" class="s1" data-head="1">Staff in numbers</div>
-<div data-bbox="121,134,717,210" class="s2"><table>
-<tr data-head><td>Satisfaction</td><td>2021</td><td>2022</td></tr>
-<tr><td>Very satisfied</td><td>41</td><td>44</td></tr>
-<tr><td>Not satisfied</td><td>21</td><td>19</td></tr>
-</table></div>
-<div data-bbox="121,467,527,481" class="s2">A paragraph after the table.</div>
-</div>
+const { html, notes } = await digpdf.html(pdf, "report.pdf");
+const page = await digpdf.image(pdf, 3); // PNG as a Uint8Array
+const block = await digpdf.image(pdf, 3, "404,262,593,292");
 ```
 
-Each page is a `<div data-page="n">` containing its blocks in reading order. A block is a paragraph, table, list,
-code block, figure or single line. `data-bbox="x0,y0,x1,y1"` is the block's bounding box in coordinates from 0 to
-1000 relative to the page width and height, with the origin at the top left, and can be passed directly to the render
-command. The CSS `class` gives the font, size and colour of most of the block's text, as defined in the `<style>`
-element in the head.
+Pass the PDF as a `Uint8Array`, an `ArrayBuffer` or a Node.js `Buffer`. Conversion and rendering block the calling thread. In the browser, run digpdf in a module Web Worker and allow `'unsafe-eval'` in the Content Security Policy.
 
-| PDF content | HTML |
-|---|---|
-| Table | `<table>`, merged cells with `colspan` and `rowspan` |
-| List | `<ul>` or `<ol>` |
-| Monospaced text | `<pre>` |
-| Bold, italic, underline, strikethrough | `<b>`, `<i>`, `<u>`, `<s>` |
-| Superscript, subscript | `<sup>`, `<sub>`, preceded by a space, as in `10 <sup>20</sup>` |
-| Link | `<a href>`, or `data-href` for `javascript:`, `vbscript:` and `data:` URLs |
-| Image | `<img data-bbox>` without `src`, rendered from its bounding box when needed |
-| Visual content (figures, charts, formulas, text with a broken encoding) | `data-visual` on a `<div>`, `<span>` or `<tbody>` |
-| Hidden text | an empty element with `hidden`, the text in `data-text` and the hiding method in `data-hidden` (`offpage`, `clipped`, `covered`, `invisible`, `samecolour` or `tiny`) |
-| Heading | `data-head="n"`, where 1 is the largest heading style |
-| Table header row | `<tr data-head>` |
-| Page header and footer | `data-header`, `data-footer` |
+### Platforms
 
-The `<head>` contains the PDF metadata in `<html lang>`, `<title>` and `<meta>` tags (author, description, keywords,
-creator, producer and dates), the digpdf version in `generator`, and the SHA-256 hash of the PDF in `source`.
+- Python package
+  - Linux, macOS and Windows
+  - x86-64 and ARM64
+  - Python 3.8+
+- npm package
+  - Node.js 20+
+  - Browsers
 
-## Windows and macOS
+## Why HTML?
 
-- Windows PowerShell 5.1 and PowerShell versions before 7.4 re-encode output redirected with `>`, which corrupts the
-  HTML and PNG files. Use `cmd`, PowerShell 7.4 or newer, or the Python package.
-- The archives are not code-signed. On Windows, choose More info and then Run anyway. On macOS, run
-  `xattr -dr com.apple.quarantine FOLDER`. Installing with uv, pip or pipx avoids both.
+Unlike Markdown and plain text, HTML keeps merged and empty table cells, font sizes and colours, line breaks inside cells and superscripts, so 14 with source note 3 does not read as 143. HTML also gives pages and blocks a standard place for attributes that record page numbers and coordinates, flag hidden text and mark running headers, footers, charts and scans. Structure affects semantics. Better to use a few more tokens than lose critical signals.
 
-## Problems
+### Attributes
 
-Please report PDFs that digpdf should read better, or platforms it should support, in the
-[issues](https://github.com/digpdf/digpdf/issues).
+| Attribute | Description |
+| --- | --- |
+| `data-page` | Page number, starting at 1, on the `<div>` that wraps each page. |
+| `data-bbox` | Left, top, right and bottom coordinates on a 0 to 1000 grid from the top left of the page. Pass them to digpdf to render that area to PNG. |
+| `class="s3"` | The block’s main style, defined as CSS in the HTML `<head>`. |
+| `data-head` | A guessed heading (ranked by size) or a table header row. |
+| `data-header`, `data-footer` | Running headers and footers. |
+| `data-visual` | A chart, formula, scan or page the text layer cannot capture. Render it to PNG with digpdf. |
+| `data-ocr` | Hidden text from an OCR layer already in the PDF, with the scan’s bounding box. |
+| `data-hidden` | How text is hidden (`offpage`, `clipped`, `covered`, `invisible`, `samecolour` or `tiny`). |
+| `data-text` | Hidden text outside the visible flow, including OCR text. |
+| `data-field` | What is typed in a form field. Check boxes and radio buttons are ☒ or ☐. |
+
+### Hidden text
+
+A model can read `data-text` in raw HTML. Before passing the HTML to a model, keep OCR text and remove `data-text` from hidden elements without `data-ocr` to reduce prompt injection risk. See the [Python example](#filter-and-extend-the-html) below.
+
+#### Filter and extend the HTML
+
+```bash
+uv add digpdf beautifulsoup4
+# or pip install digpdf beautifulsoup4
+```
+
+Remove `data-text` from hidden elements without `data-ocr`
+
+```python
+import digpdf
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(digpdf.html("report.pdf"), "html.parser")
+for el in soup.select("[data-hidden]:not([data-ocr])"):
+    el.attrs.pop("data-text", None)  # keeps data-hidden and data-bbox
+html_for_the_model = str(soup)
+```
+
+### Traceability
+
+The HTML `<head>` records the digpdf version in `<meta name="generator">` and the source PDF’s SHA-256 hash in `<meta name="source">`. Parsing the same PDF with the same digpdf version produces byte-identical HTML.
 
 ## Licence
 
-digpdf is free to use, also commercially. It is not open source. See LICENSE. It includes PDFium and other
-third-party software under their own licences, listed in THIRD-PARTY-NOTICES.txt.
+See LICENSE. digpdf includes PDFium and other third-party software under their own licences, listed in
+THIRD-PARTY-NOTICES.txt.
+
+## Links
+
+- [digpdf](https://digpdf.com)
+- [GitHub](https://github.com/digpdf/digpdf)
+- [GitHub releases](https://github.com/digpdf/digpdf/releases)
+- [PyPI](https://pypi.org/project/digpdf/)
+- [npm](https://www.npmjs.com/package/digpdf)
